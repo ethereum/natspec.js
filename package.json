@@ -10,7 +10,7 @@
   },
   "author": "",
   "dependencies": {
-    "ethereum.js": "ethereum/ethereum.js#signature"
+    "ethereum.js": "ethereum/ethereum.js#master"
   },
   "devDependencies": {
     "browserify": "^9.0.3",

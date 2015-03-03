@@ -42,6 +42,6 @@ npm test
 
 ## Wiki
 
-[Ethereum Natural Specification Format](https://github.com/ethereum/wiki/wiki/Ethereum-Natural-Specification-Format)
-[Natspec Example](https://github.com/ethereum/wiki/wiki/Natspec-Example)
+* [Ethereum Natural Specification Format](https://github.com/ethereum/wiki/wiki/Ethereum-Natural-Specification-Format)
+* [Natspec Example](https://github.com/ethereum/wiki/wiki/Natspec-Example)
 

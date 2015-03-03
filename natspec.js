@@ -1,4 +1,6 @@
 
+var web3abi = require('./node_modules/ethereum.js/lib/abi.js'); 
+
 /**
  * This object should be used to evaluate natspec expression
  * It has one method evaluateExpression which shoul be used
@@ -94,6 +96,5 @@ var natspec = (function () {
 
 })();
 
-if (typeof(module) !== 'undefined')
-    module.exports = natspec; 
+module.exports = natspec; 
 

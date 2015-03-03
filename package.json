@@ -4,12 +4,16 @@
   "description": "Javascript Library used to evaluate natspec expressions",
   "main": "natspec.js",
   "scripts": {
+    "build": "browserify natspec.js > dist/natspec.js",
     "test": "mocha",
     "test-coveralls": "istanbul cover _mocha -- -R spec && cat coverage/lcov.info | coveralls --verbose"
   },
   "author": "",
-  "dependencies": {},
+  "dependencies": {
+    "ethereum.js": "ethereum/ethereum.js#signature"
+  },
   "devDependencies": {
+    "browserify": "^9.0.3",
     "coveralls": "^2.11.2",
     "istanbul": "^0.3.6",
     "mocha": "^2.1.0"

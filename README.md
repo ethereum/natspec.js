@@ -7,6 +7,6 @@ It exposes global object `natspec` with method `evaluateExpression`.
 
 ```javascript
 var natspecExpression = "Will multiply `a` by 7 and return `a * 7`.";
-var evaluatedExpression = natspec.evaluateExpression(abi, transaction, natspecExpression);
+var evaluatedExpression = natspec.evaluateExpression(natspecExpression, abi, transaction);
 console.log(evaluatedExpression); // "Will multiply 4 by 7 and return 28."
 ```

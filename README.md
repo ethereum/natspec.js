@@ -28,3 +28,20 @@ console.log(evaluatedExpression); // "Will multiply 4 by 7 and return 28."
 
 More examples are available [here](https://github.com/ethereum/natspec.js/blob/master/test/test.js).
 
+## Building
+
+```bash
+npm run-script build
+```
+
+## Testing (mocha)
+
+```bash
+npm test
+```
+
+## Wiki
+
+[Ethereum Natural Specification Format](https://github.com/ethereum/wiki/wiki/Ethereum-Natural-Specification-Format)
+[Natspec Example](https://github.com/ethereum/wiki/wiki/Natspec-Example)
+

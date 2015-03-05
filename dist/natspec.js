@@ -1,147 +1,6 @@
-(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-(function (global){
-/*
-    This file is part of natspec.js.
+require=(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 
-    natspec.js is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Lesser General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    natspec.js is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Lesser General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public License
-    along with natspec.js.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/** @file natspec.js
- * @authors:
- *   Marek Kotewicz <marek@ethdev.com>
- * @date 2015
- */
-
-var abi = require('./node_modules/ethereum.js/lib/abi.js'); 
-
-/**
- * This object should be used to evaluate natspec expression
- * It has one method evaluateExpression which shoul be used
- */
-var natspec = (function () {
-    /// Helper method
-    /// Should be called to copy values from object to global context
-    var copyToContext = function (obj, context) {
-        var keys = Object.keys(obj);
-        keys.forEach(function (key) {
-            context[key] = obj[key];
-        });
-    }
-
-    /// this function will not be used in 'production' natspec evaluation
-    /// it's only used to enable tests in node environment
-    /// it copies all functions from current context to nodejs global context
-    var copyToNodeGlobal = function (obj) {
-        if (typeof global === 'undefined') {
-            return;
-        }
-        copyToContext(obj, global);
-    };
-
-    /// Helper method
-    /// Should be called to get method with given name from the abi
-    /// @param contract's abi
-    /// @param name of the method that we are looking for
-    var getMethodWithName = function(abi, name) {
-        return abi.filter(function (method) {
-            return method.name === name;
-        })[0];
-    };
-
-    /// Function called to get all contract's storage values
-    /// @returns hashmap with contract properties which are used
-    /// TODO: check if this function will be used
-    var getContractProperties = function (address, abi) {
-        return {};
-    };
-
-    /// Function called to get all contract method input variables
-    /// @returns hashmap with all contract's method input variables
-    var getMethodInputParams = function (method, transaction) {
-        // do it with output formatter (cause we have to decode)
-        var params = abi.formatOutput(method.inputs, '0x' + transaction.params[0].data.slice(10)); 
-
-        return method.inputs.reduce(function (acc, current, index) {
-            acc[current.name] = params[index];
-            return acc;
-        }, {});
-    };
-    
-    /// Should be called to evaluate single expression
-    /// Is internally using javascript's 'eval' method
-    /// @param expression which should be evaluated
-    /// @param [call] object containing contract abi, transaction, called method
-    /// TODO: separate evaluation from getting input params, so as not to spoil 'evaluateExpression' function
-    var evaluateExpression = function (expression, call) {
-        var self = this;
-        
-        if (!!call) {
-            try {
-                var method = getMethodWithName(call.abi, call.method);
-                var params = getMethodInputParams(method, call.transaction); 
-                copyToContext(params, self);
-            }
-            catch (err) {
-                return "Natspec evaluation failed, wrong input params";
-            }
-        }
-
-        // used only for tests
-        copyToNodeGlobal(self);
-
-        var evaluatedExpression = "";
-
-        // match everything in `` quotes
-        var pattern = /\`(?:\\.|[^`\\])*\`/gim
-        var match;
-        var lastIndex = 0;
-        while ((match = pattern.exec(expression)) !== null) {
-            var startIndex = pattern.lastIndex - match[0].length;
-
-            var toEval = match[0].slice(1, match[0].length - 1);
-
-            evaluatedExpression += expression.slice(lastIndex, startIndex);
-
-            var evaluatedPart;
-            try {
-                evaluatedPart = eval(toEval).toString(); 
-            }
-            catch (err) {
-                evaluatedPart = 'undefined'; 
-            }
-
-            evaluatedExpression += evaluatedPart;
-            lastIndex = pattern.lastIndex;
-        }
-
-        evaluatedExpression += expression.slice(lastIndex);
-        
-        return evaluatedExpression;
-    };
-
-    return {
-        evaluateExpression: evaluateExpression
-    };
-
-})();
-
-module.exports = natspec; 
-
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./node_modules/ethereum.js/lib/abi.js":4}],2:[function(require,module,exports){
-
-},{}],3:[function(require,module,exports){
+},{}],2:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -200,7 +59,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],4:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -403,7 +262,7 @@ module.exports = {
     formatOutput: formatOutput
 };
 
-},{"./const":5,"./formatters":6,"./types":7,"./utils":8}],5:[function(require,module,exports){
+},{"./const":4,"./formatters":5,"./types":6,"./utils":7}],4:[function(require,module,exports){
 (function (process){
 /*
     This file is part of ethereum.js.
@@ -464,7 +323,7 @@ module.exports = {
 
 
 }).call(this,require('_process'))
-},{"_process":3,"bignumber.js":9}],6:[function(require,module,exports){
+},{"_process":2,"bignumber.js":8}],5:[function(require,module,exports){
 (function (process){
 /*
     This file is part of ethereum.js.
@@ -623,7 +482,7 @@ module.exports = {
 
 
 }).call(this,require('_process'))
-},{"./const":5,"./utils":8,"_process":3,"bignumber.js":9}],7:[function(require,module,exports){
+},{"./const":4,"./utils":7,"_process":2,"bignumber.js":8}],6:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -704,7 +563,7 @@ module.exports = {
 };
 
 
-},{"./formatters":6}],8:[function(require,module,exports){
+},{"./formatters":5}],7:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -849,7 +708,7 @@ module.exports = {
 };
 
 
-},{"./const":5}],9:[function(require,module,exports){
+},{"./const":4}],8:[function(require,module,exports){
 /*! bignumber.js v2.0.3 https://github.com/MikeMcl/bignumber.js/LICENCE */
 
 ;(function (global) {
@@ -3520,4 +3379,145 @@ module.exports = {
     }
 })(this);
 
-},{"crypto":2}]},{},[1]);
+},{"crypto":1}],"natspec":[function(require,module,exports){
+(function (global){
+/*
+    This file is part of natspec.js.
+
+    natspec.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    natspec.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with natspec.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/** @file natspec.js
+ * @authors:
+ *   Marek Kotewicz <marek@ethdev.com>
+ * @date 2015
+ */
+
+var abi = require('./node_modules/ethereum.js/lib/abi.js'); 
+
+/**
+ * This object should be used to evaluate natspec expression
+ * It has one method evaluateExpression which shoul be used
+ */
+var natspec = (function () {
+    /// Helper method
+    /// Should be called to copy values from object to global context
+    var copyToContext = function (obj, context) {
+        var keys = Object.keys(obj);
+        keys.forEach(function (key) {
+            context[key] = obj[key];
+        });
+    }
+
+    /// this function will not be used in 'production' natspec evaluation
+    /// it's only used to enable tests in node environment
+    /// it copies all functions from current context to nodejs global context
+    var copyToNodeGlobal = function (obj) {
+        if (typeof global === 'undefined') {
+            return;
+        }
+        copyToContext(obj, global);
+    };
+
+    /// Helper method
+    /// Should be called to get method with given name from the abi
+    /// @param contract's abi
+    /// @param name of the method that we are looking for
+    var getMethodWithName = function(abi, name) {
+        return abi.filter(function (method) {
+            return method.name === name;
+        })[0];
+    };
+
+    /// Function called to get all contract's storage values
+    /// @returns hashmap with contract properties which are used
+    /// TODO: check if this function will be used
+    var getContractProperties = function (address, abi) {
+        return {};
+    };
+
+    /// Function called to get all contract method input variables
+    /// @returns hashmap with all contract's method input variables
+    var getMethodInputParams = function (method, transaction) {
+        // do it with output formatter (cause we have to decode)
+        var params = abi.formatOutput(method.inputs, '0x' + transaction.params[0].data.slice(10)); 
+
+        return method.inputs.reduce(function (acc, current, index) {
+            acc[current.name] = params[index];
+            return acc;
+        }, {});
+    };
+    
+    /// Should be called to evaluate single expression
+    /// Is internally using javascript's 'eval' method
+    /// @param expression which should be evaluated
+    /// @param [call] object containing contract abi, transaction, called method
+    /// TODO: separate evaluation from getting input params, so as not to spoil 'evaluateExpression' function
+    var evaluateExpression = function (expression, call) {
+        var self = this;
+        
+        if (!!call) {
+            try {
+                var method = getMethodWithName(call.abi, call.method);
+                var params = getMethodInputParams(method, call.transaction); 
+                copyToContext(params, self);
+            }
+            catch (err) {
+                return "Natspec evaluation failed, wrong input params";
+            }
+        }
+
+        // used only for tests
+        copyToNodeGlobal(self);
+
+        var evaluatedExpression = "";
+
+        // match everything in `` quotes
+        var pattern = /\`(?:\\.|[^`\\])*\`/gim
+        var match;
+        var lastIndex = 0;
+        while ((match = pattern.exec(expression)) !== null) {
+            var startIndex = pattern.lastIndex - match[0].length;
+
+            var toEval = match[0].slice(1, match[0].length - 1);
+
+            evaluatedExpression += expression.slice(lastIndex, startIndex);
+
+            var evaluatedPart;
+            try {
+                evaluatedPart = eval(toEval).toString(); 
+            }
+            catch (err) {
+                evaluatedPart = 'undefined'; 
+            }
+
+            evaluatedExpression += evaluatedPart;
+            lastIndex = pattern.lastIndex;
+        }
+
+        evaluatedExpression += expression.slice(lastIndex);
+        
+        return evaluatedExpression;
+    };
+
+    return {
+        evaluateExpression: evaluateExpression
+    };
+
+})();
+
+module.exports = natspec; 
+
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./node_modules/ethereum.js/lib/abi.js":3}]},{},[]);

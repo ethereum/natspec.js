@@ -4,7 +4,7 @@
   "description": "Javascript Library used to evaluate natspec expressions",
   "main": "natspec.js",
   "scripts": {
-    "build": "browserify natspec.js -i crypto -o dist/natspec.js && uglifyjs dist/natspec.js --source-map dist/natspec.js.map -c -m -o dist/natspec.min.js",
+    "build": "cd dist && browserify -r ../natspec.js:natspec -i crypto -o natspec.js && uglifyjs natspec.js --source-map natspec.js.map -c -m -o natspec.min.js",
     "test": "mocha",
     "test-coveralls": "istanbul cover _mocha -- -R spec && cat coverage/lcov.info | coveralls --verbose"
   },

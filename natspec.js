@@ -30,20 +30,16 @@ var natspec = (function () {
     /// Helper method
     /// Should be called to copy values from object to global context
     var copyToContext = function (obj, context) {
-        var keys = Object.keys(obj);
-        keys.forEach(function (key) {
+        Object.keys(obj).forEach(function (key) {
             context[key] = obj[key];
         });
     }
-
-    /// this function will not be used in 'production' natspec evaluation
-    /// it's only used to enable tests in node environment
-    /// it copies all functions from current context to nodejs global context
-    var copyToNodeGlobal = function (obj) {
-        if (typeof global === 'undefined') {
-            return;
-        }
-        copyToContext(obj, global);
+    
+    /// generate codes, which will be evaluated
+    var generateCode = function (obj) {
+        return Object.keys(obj).reduce(function (acc, key) {
+            return acc + "var " + key + " = context['" + key + "'];\n";
+        }, "");
     };
 
     /// Helper method
@@ -54,13 +50,6 @@ var natspec = (function () {
         return abi.filter(function (method) {
             return method.name === name;
         })[0];
-    };
-
-    /// Function called to get all contract's storage values
-    /// @returns hashmap with contract properties which are used
-    /// TODO: check if this function will be used
-    var getContractProperties = function (address, abi) {
-        return {};
     };
 
     /// Function called to get all contract method input variables
@@ -75,28 +64,8 @@ var natspec = (function () {
         }, {});
     };
     
-    /// Should be called to evaluate single expression
-    /// Is internally using javascript's 'eval' method
-    /// @param expression which should be evaluated
-    /// @param [call] object containing contract abi, transaction, called method
-    /// TODO: separate evaluation from getting input params, so as not to spoil 'evaluateExpression' function
-    var evaluateExpression = function (expression, call) {
-        var self = this;
-        
-        if (!!call) {
-            try {
-                var method = getMethodWithName(call.abi, call.method);
-                var params = getMethodInputParams(method, call.transaction); 
-                copyToContext(params, self);
-            }
-            catch (err) {
-                return "Natspec evaluation failed, wrong input params";
-            }
-        }
-
-        // used only for tests
-        copyToNodeGlobal(self);
-
+    /// Should be called to evaluate expression
+    var mapExpressionsToEvaluate = function (expression, cb) {
         var evaluatedExpression = "";
 
         // match everything in `` quotes
@@ -105,25 +74,50 @@ var natspec = (function () {
         var lastIndex = 0;
         while ((match = pattern.exec(expression)) !== null) {
             var startIndex = pattern.lastIndex - match[0].length;
-
             var toEval = match[0].slice(1, match[0].length - 1);
-
             evaluatedExpression += expression.slice(lastIndex, startIndex);
-
-            var evaluatedPart;
-            try {
-                evaluatedPart = eval(toEval).toString(); 
-            }
-            catch (err) {
-                evaluatedPart = 'undefined'; 
-            }
-
+            var evaluatedPart = cb(toEval);
             evaluatedExpression += evaluatedPart;
             lastIndex = pattern.lastIndex;
         }
-
-        evaluatedExpression += expression.slice(lastIndex);
         
+        evaluatedExpression += expression.slice(lastIndex);
+    
+        return evaluatedExpression;
+    };
+
+    /// Should be called to evaluate single expression
+    /// Is internally using javascript's 'eval' method
+    /// @param expression which should be evaluated
+    /// @param [call] object containing contract abi, transaction, called method
+    /// TODO: separate evaluation from getting input params, so as not to spoil 'evaluateExpression' function
+    var evaluateExpression = function (expression, call) {
+        //var self = this;
+        var context = {};
+        
+        if (!!call) {
+            try {
+                var method = getMethodWithName(call.abi, call.method);
+                var params = getMethodInputParams(method, call.transaction); 
+                copyToContext(params, context);
+            }
+            catch (err) {
+                return "Natspec evaluation failed, wrong input params";
+            }
+        }
+
+        var code = generateCode(context);
+
+        var evaluatedExpression = mapExpressionsToEvaluate(expression, function (toEval) {
+            try {
+                var fn = new Function("context", code + "return " + toEval + ";");
+                return fn(context).toString();
+            }
+            catch (err) {
+                return 'undefined'; 
+            }
+        });
+
         return evaluatedExpression;
     };
 

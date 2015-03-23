@@ -37,6 +37,7 @@ process.browser = true;
 process.env = {};
 process.argv = [];
 process.version = ''; // empty string to avoid regexp issues
+process.versions = {};
 
 function noop() {}
 
@@ -83,34 +84,57 @@ process.umask = function() { return 0; };
  * @date 2014
  */
 
-var utils = require('./utils');
+var utils = require('../utils/utils');
+var c = require('../utils/config');
 var types = require('./types');
-var c = require('./const');
 var f = require('./formatters');
 
-var displayTypeError = function (type) {
-    console.error('parser does not support type: ' + type);
+/**
+ * throw incorrect type error
+ *
+ * @method throwTypeError
+ * @param {String} type
+ * @throws incorrect type error
+ */
+var throwTypeError = function (type) {
+    throw new Error('parser does not support type: ' + type);
 };
 
-/// This method should be called if we want to check if givent type is an array type
-/// @returns true if it is, otherwise false
-var arrayType = function (type) {
+/** This method should be called if we want to check if givent type is an array type
+ *
+ * @method isArrayType
+ * @param {String} type name
+ * @returns {Boolean} true if it is, otherwise false
+ */
+var isArrayType = function (type) {
     return type.slice(-2) === '[]';
 };
 
+/**
+ * This method should be called to return dynamic type length in hex
+ *
+ * @method dynamicTypeBytes
+ * @param {String} type
+ * @param {String|Array} dynamic type
+ * @return {String} length of dynamic type in hex or empty string if type is not dynamic
+ */
 var dynamicTypeBytes = function (type, value) {
     // TODO: decide what to do with array of strings
-    if (arrayType(type) || type === 'string')    // only string itself that is dynamic; stringX is static length.
+    if (isArrayType(type) || type === 'string')    // only string itself that is dynamic; stringX is static length.
         return f.formatInputInt(value.length);
     return "";
 };
 
 var inputTypes = types.inputTypes();
 
-/// Formats input params to bytes
-/// @param abi contract method inputs
-/// @param array of params that will be formatted to bytes
-/// @returns bytes representation of input params
+/**
+ * Formats input params to bytes
+ *
+ * @method formatInput
+ * @param {Array} abi inputs of method
+ * @param {Array} params that will be formatted to bytes
+ * @returns bytes representation of input params
+ */
 var formatInput = function (inputs, params) {
     var bytes = "";
     var toAppendConstant = "";
@@ -128,12 +152,12 @@ var formatInput = function (inputs, params) {
             typeMatch = inputTypes[j].type(inputs[i].type, params[i]);
         }
         if (!typeMatch) {
-            displayTypeError(inputs[i].type);
+            throwTypeError(inputs[i].type);
         }
 
         var formatter = inputTypes[j - 1].format;
 
-        if (arrayType(inputs[i].type))
+        if (isArrayType(inputs[i].type))
             toAppendArrayContent += params[i].reduce(function (acc, curr) {
                 return acc + formatter(curr);
             }, "");
@@ -148,18 +172,29 @@ var formatInput = function (inputs, params) {
     return bytes;
 };
 
+/**
+ * This method should be called to predict the length of dynamic type
+ *
+ * @method dynamicBytesLength
+ * @param {String} type
+ * @returns {Number} length of dynamic type, 0 or multiplication of ETH_PADDING (32)
+ */
 var dynamicBytesLength = function (type) {
-    if (arrayType(type) || type === 'string')   // only string itself that is dynamic; stringX is static length.
+    if (isArrayType(type) || type === 'string')   // only string itself that is dynamic; stringX is static length.
         return c.ETH_PADDING * 2;
     return 0;
 };
 
 var outputTypes = types.outputTypes();
 
-/// Formats output bytes back to param list
-/// @param contract abi method outputs
-/// @param bytes representtion of output
-/// @returns array of output params
+/** 
+ * Formats output bytes back to param list
+ *
+ * @method formatOutput
+ * @param {Array} abi outputs of method
+ * @param {String} bytes represention of output
+ * @returns {Array} output params
+ */
 var formatOutput = function (outs, output) {
 
     output = output.slice(2);
@@ -181,11 +216,11 @@ var formatOutput = function (outs, output) {
         }
 
         if (!typeMatch) {
-            displayTypeError(outs[i].type);
+            throwTypeError(outs[i].type);
         }
 
         var formatter = outputTypes[j - 1].format;
-        if (arrayType(outs[i].type)) {
+        if (isArrayType(outs[i].type)) {
             var size = f.formatOutputUInt(dynamicPart.slice(0, padding));
             dynamicPart = dynamicPart.slice(padding);
             var array = [];
@@ -208,9 +243,14 @@ var formatOutput = function (outs, output) {
     return result;
 };
 
-/// @param json abi for contract
-/// @returns input parser object for given json abi
-/// TODO: refactor creating the parser, do not double logic from contract
+/**
+ * Should be called to create input parser for contract with given abi
+ *
+ * @method inputParser
+ * @param {Array} contract abi
+ * @returns {Object} input parser object for given json abi
+ * TODO: refactor creating the parser, do not double logic from contract
+ */
 var inputParser = function (json) {
     var parser = {};
     json.forEach(function (method) {
@@ -232,8 +272,13 @@ var inputParser = function (json) {
     return parser;
 };
 
-/// @param json abi for contract
-/// @returns output parser for given json abi
+/**
+ * Should be called to create output parser for contract with given abi
+ *
+ * @method outputParser
+ * @param {Array} contract abi
+ * @returns {Object} output parser for given json abi
+ */
 var outputParser = function (json) {
     var parser = {};
     json.forEach(function (method) {
@@ -262,68 +307,7 @@ module.exports = {
     formatOutput: formatOutput
 };
 
-},{"./const":4,"./formatters":5,"./types":6,"./utils":7}],4:[function(require,module,exports){
-(function (process){
-/*
-    This file is part of ethereum.js.
-
-    ethereum.js is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Lesser General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    ethereum.js is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Lesser General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/** @file const.js
- * @authors:
- *   Marek Kotewicz <marek@ethdev.com>
- * @date 2015
- */
-
-/// required to define ETH_BIGNUMBER_ROUNDING_MODE
-if (process.env.NODE_ENV !== 'build') {
-    var BigNumber = require('bignumber.js'); // jshint ignore:line
-}
-
-var ETH_UNITS = [ 
-    'wei', 
-    'Kwei', 
-    'Mwei', 
-    'Gwei', 
-    'szabo', 
-    'finney', 
-    'ether', 
-    'grand', 
-    'Mether', 
-    'Gether', 
-    'Tether', 
-    'Pether', 
-    'Eether', 
-    'Zether', 
-    'Yether', 
-    'Nether', 
-    'Dether', 
-    'Vether', 
-    'Uether' 
-];
-
-module.exports = {
-    ETH_PADDING: 32,
-    ETH_SIGNATURE_LENGTH: 4,
-    ETH_UNITS: ETH_UNITS,
-    ETH_BIGNUMBER_ROUNDING_MODE: { ROUNDING_MODE: BigNumber.ROUND_DOWN },
-    ETH_POLLING_TIMEOUT: 1000
-};
-
-
-}).call(this,require('_process'))
-},{"_process":2,"bignumber.js":8}],5:[function(require,module,exports){
+},{"../utils/config":6,"../utils/utils":7,"./formatters":4,"./types":5}],4:[function(require,module,exports){
 (function (process){
 /*
     This file is part of ethereum.js.
@@ -351,74 +335,93 @@ if (process.env.NODE_ENV !== 'build') {
     var BigNumber = require('bignumber.js'); // jshint ignore:line
 }
 
-var utils = require('./utils');
-var c = require('./const');
+var utils = require('../utils/utils');
+var c = require('../utils/config');
 
-/// @param string string to be padded
-/// @param number of characters that result string should have
-/// @param sign, by default 0
-/// @returns right aligned string
+/**
+ * Should be called to pad string to expected length
+ *
+ * @method padLeft
+ * @param {String} string to be padded
+ * @param {Number} characters that result string should have
+ * @param {String} sign, by default 0
+ * @returns {String} right aligned string
+ */
 var padLeft = function (string, chars, sign) {
     return new Array(chars - string.length + 1).join(sign ? sign : "0") + string;
 };
 
-/// Formats input value to byte representation of int
-/// If value is negative, return it's two's complement
-/// If the value is floating point, round it down
-/// @returns right-aligned byte representation of int
+/**
+ * Formats input value to byte representation of int
+ * If value is negative, return it's two's complement
+ * If the value is floating point, round it down
+ *
+ * @method formatInputInt
+ * @param {String|Number|BigNumber} value that needs to be formatted
+ * @returns {String} right-aligned byte representation of int
+ */
 var formatInputInt = function (value) {
-    /*jshint maxcomplexity:7 */
     var padding = c.ETH_PADDING * 2;
-    if (value instanceof BigNumber || typeof value === 'number') {
-        if (typeof value === 'number')
-            value = new BigNumber(value);
-        BigNumber.config(c.ETH_BIGNUMBER_ROUNDING_MODE);
-        value = value.round();
-
-        if (value.lessThan(0)) 
-            value = new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16).plus(value).plus(1);
-        value = value.toString(16);
-    }
-    else if (value.indexOf('0x') === 0)
-        value = value.substr(2);
-    else if (typeof value === 'string')
-        value = formatInputInt(new BigNumber(value));
-    else
-        value = (+value).toString(16);
-    return padLeft(value, padding);
+    BigNumber.config(c.ETH_BIGNUMBER_ROUNDING_MODE);
+    return padLeft(utils.toTwosComplement(value).round().toString(16), padding);
 };
 
-/// Formats input value to byte representation of string
-/// @returns left-algined byte representation of string
+/**
+ * Formats input value to byte representation of string
+ *
+ * @method formatInputString
+ * @param {String}
+ * @returns {String} left-algined byte representation of string
+ */
 var formatInputString = function (value) {
     return utils.fromAscii(value, c.ETH_PADDING).substr(2);
 };
 
-/// Formats input value to byte representation of bool
-/// @returns right-aligned byte representation bool
+/**
+ * Formats input value to byte representation of bool
+ *
+ * @method formatInputBool
+ * @param {Boolean}
+ * @returns {String} right-aligned byte representation bool
+ */
 var formatInputBool = function (value) {
     return '000000000000000000000000000000000000000000000000000000000000000' + (value ?  '1' : '0');
 };
 
-/// Formats input value to byte representation of real
-/// Values are multiplied by 2^m and encoded as integers
-/// @returns byte representation of real
+/**
+ * Formats input value to byte representation of real
+ * Values are multiplied by 2^m and encoded as integers
+ *
+ * @method formatInputReal
+ * @param {String|Number|BigNumber}
+ * @returns {String} byte representation of real
+ */
 var formatInputReal = function (value) {
     return formatInputInt(new BigNumber(value).times(new BigNumber(2).pow(128))); 
 };
 
-
-/// Check if input value is negative
-/// @param value is hex format
-/// @returns true if it is negative, otherwise false
+/**
+ * Check if input value is negative
+ *
+ * @method signedIsNegative
+ * @param {String} value is hex format
+ * @returns {Boolean} true if it is negative, otherwise false
+ */
 var signedIsNegative = function (value) {
     return (new BigNumber(value.substr(0, 1), 16).toString(2).substr(0, 1)) === '1';
 };
 
-/// Formats input right-aligned input bytes to int
-/// @returns right-aligned input bytes formatted to int
+/**
+ * Formats right-aligned output bytes to int
+ *
+ * @method formatOutputInt
+ * @param {String} bytes
+ * @returns {BigNumber} right-aligned output bytes formatted to big number
+ */
 var formatOutputInt = function (value) {
+
     value = value || "0";
+
     // check if it's negative number
     // it it is, return two's complement
     if (signedIsNegative(value)) {
@@ -427,43 +430,83 @@ var formatOutputInt = function (value) {
     return new BigNumber(value, 16);
 };
 
-/// Formats big right-aligned input bytes to uint
-/// @returns right-aligned input bytes formatted to uint
+/**
+ * Formats right-aligned output bytes to uint
+ *
+ * @method formatOutputUInt
+ * @param {String} bytes
+ * @returns {BigNumeber} right-aligned output bytes formatted to uint
+ */
 var formatOutputUInt = function (value) {
     value = value || "0";
     return new BigNumber(value, 16);
 };
 
-/// @returns input bytes formatted to real
+/**
+ * Formats right-aligned output bytes to real
+ *
+ * @method formatOutputReal
+ * @param {String}
+ * @returns {BigNumber} input bytes formatted to real
+ */
 var formatOutputReal = function (value) {
     return formatOutputInt(value).dividedBy(new BigNumber(2).pow(128)); 
 };
 
-/// @returns input bytes formatted to ureal
+/**
+ * Formats right-aligned output bytes to ureal
+ *
+ * @method formatOutputUReal
+ * @param {String}
+ * @returns {BigNumber} input bytes formatted to ureal
+ */
 var formatOutputUReal = function (value) {
     return formatOutputUInt(value).dividedBy(new BigNumber(2).pow(128)); 
 };
 
-/// @returns right-aligned input bytes formatted to hex
+/**
+ * Should be used to format output hash
+ *
+ * @method formatOutputHash
+ * @param {String}
+ * @returns {String} right-aligned output bytes formatted to hex
+ */
 var formatOutputHash = function (value) {
     return "0x" + value;
 };
 
-/// @returns right-aligned input bytes formatted to bool
+/**
+ * Should be used to format output bool
+ *
+ * @method formatOutputBool
+ * @param {String}
+ * @returns {Boolean} right-aligned input bytes formatted to bool
+ */
 var formatOutputBool = function (value) {
     return value === '0000000000000000000000000000000000000000000000000000000000000001' ? true : false;
 };
 
-/// @returns left-aligned input bytes formatted to ascii string
+/**
+ * Should be used to format output string
+ *
+ * @method formatOutputString
+ * @param {Sttring} left-aligned hex representation of string
+ * @returns {String} ascii string
+ */
 var formatOutputString = function (value) {
     return utils.toAscii(value);
 };
 
-/// @returns right-aligned input bytes formatted to address
+/**
+ * Should be used to format output address
+ *
+ * @method formatOutputAddress
+ * @param {String} right-aligned input bytes
+ * @returns {String} address
+ */
 var formatOutputAddress = function (value) {
     return "0x" + value.slice(value.length - 40, value.length);
 };
-
 
 module.exports = {
     formatInputInt: formatInputInt,
@@ -482,7 +525,7 @@ module.exports = {
 
 
 }).call(this,require('_process'))
-},{"./const":4,"./utils":7,"_process":2,"bignumber.js":8}],6:[function(require,module,exports){
+},{"../utils/config":6,"../utils/utils":7,"_process":2,"bignumber.js":8}],5:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -563,7 +606,83 @@ module.exports = {
 };
 
 
-},{"./formatters":5}],7:[function(require,module,exports){
+},{"./formatters":4}],6:[function(require,module,exports){
+(function (process){
+/*
+    This file is part of ethereum.js.
+
+    ethereum.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    ethereum.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/** @file config.js
+ * @authors:
+ *   Marek Kotewicz <marek@ethdev.com>
+ * @date 2015
+ */
+
+/**
+ * Utils
+ * 
+ * @module utils
+ */
+
+/**
+ * Utility functions
+ * 
+ * @class [utils] config
+ * @constructor
+ */
+
+/// required to define ETH_BIGNUMBER_ROUNDING_MODE
+if (process.env.NODE_ENV !== 'build') {
+    var BigNumber = require('bignumber.js'); // jshint ignore:line
+}
+
+var ETH_UNITS = [ 
+    'wei', 
+    'Kwei', 
+    'Mwei', 
+    'Gwei', 
+    'szabo', 
+    'finney', 
+    'ether', 
+    'grand', 
+    'Mether', 
+    'Gether', 
+    'Tether', 
+    'Pether', 
+    'Eether', 
+    'Zether', 
+    'Yether', 
+    'Nether', 
+    'Dether', 
+    'Vether', 
+    'Uether' 
+];
+
+module.exports = {
+    ETH_PADDING: 32,
+    ETH_SIGNATURE_LENGTH: 4,
+    ETH_UNITS: ETH_UNITS,
+    ETH_BIGNUMBER_ROUNDING_MODE: { ROUNDING_MODE: BigNumber.ROUND_DOWN },
+    ETH_POLLING_TIMEOUT: 1000,
+    ETH_DEFAULTBLOCK: 'latest'
+};
+
+
+}).call(this,require('_process'))
+},{"_process":2,"bignumber.js":8}],7:[function(require,module,exports){
+(function (process){
 /*
     This file is part of ethereum.js.
 
@@ -586,12 +705,50 @@ module.exports = {
  * @date 2015
  */
 
-var c = require('./const');
+/**
+ * Utils
+ * 
+ * @module utils
+ */
 
-/// Finds first index of array element matching pattern
-/// @param array
-/// @param callback pattern
-/// @returns index of element
+/**
+ * Utility functions
+ * 
+ * @class [utils] utils
+ * @constructor
+ */
+
+if (process.env.NODE_ENV !== 'build') {
+    var BigNumber = require('bignumber.js'); // jshint ignore:line
+}
+
+var unitMap = {
+    'wei':      '1',
+    'kwei':     '1000',
+    'ada':      '1000',
+    'mwei':     '1000000',
+    'babbage':  '1000000',
+    'gwei':     '1000000000',
+    'shannon':  '1000000000',
+    'szabo':    '1000000000000',
+    'finney':   '1000000000000000',
+    'ether':    '1000000000000000000',
+    'kether':   '1000000000000000000000',
+    'grand':    '1000000000000000000000',
+    'einstein': '1000000000000000000000',
+    'mether':   '1000000000000000000000000',
+    'gether':   '1000000000000000000000000000',
+    'tether':   '1000000000000000000000000000000'
+};
+
+
+/** Finds first index of array element matching pattern
+ *
+ * @method findIndex
+ * @param {Array}
+ * @param {Function} pattern
+ * @returns {Number} index of element
+ */
 var findIndex = function (array, callback) {
     var end = false;
     var i = 0;
@@ -601,7 +758,13 @@ var findIndex = function (array, callback) {
     return end ? i - 1 : -1;
 };
 
-/// @returns ascii string representation of hex value prefixed with 0x
+/** 
+ * Should be called to get sting from it's hex representation
+ *
+ * @method toAscii
+ * @param {String} string in hex
+ * @returns {String} ascii string representation of hex value
+ */
 var toAscii = function(hex) {
 // Find termination
     var str = "";
@@ -621,7 +784,14 @@ var toAscii = function(hex) {
     return str;
 };
     
-var toHex = function(str) {
+/**
+ * Shold be called to get hex representation (prefixed by 0x) of ascii string 
+ *
+ * @method fromAscii
+ * @param {String} string
+ * @returns {String} hex representation of input string
+ */
+var toHexNative = function(str) {
     var hex = "";
     for(var i = 0; i < str.length; i++) {
         var n = str.charCodeAt(i).toString(16);
@@ -631,16 +801,29 @@ var toHex = function(str) {
     return hex;
 };
 
-/// @returns hex representation (prefixed by 0x) of ascii string
+/**
+ * Shold be called to get hex representation (prefixed by 0x) of ascii string 
+ *
+ * @method fromAscii
+ * @param {String} string
+ * @param {Number} optional padding
+ * @returns {String} hex representation of input string
+ */
 var fromAscii = function(str, pad) {
     pad = pad === undefined ? 0 : pad;
-    var hex = toHex(str);
+    var hex = toHexNative(str);
     while (hex.length < pad*2)
         hex += "00";
     return "0x" + hex;
 };
 
-/// @returns display name for function/event eg. multiply(uint256) -> multiply
+/**
+ * Should be called to get display name of contract function
+ * 
+ * @method extractDisplayName
+ * @param {String} name of function/event
+ * @returns {String} display name for function/event eg. multiply(uint256) -> multiply
+ */
 var extractDisplayName = function (name) {
     var length = name.indexOf('('); 
     return length !== -1 ? name.substr(0, length) : name;
@@ -653,62 +836,304 @@ var extractTypeName = function (name) {
     return length !== -1 ? name.substr(length + 1, name.length - 1 - (length + 1)).replace(' ', '') : "";
 };
 
-/// Filters all function from input abi
-/// @returns abi array with filtered objects of type 'function'
+/**
+ * Filters all functions from input abi
+ *
+ * @method filterFunctions
+ * @param {Array} abi
+ * @returns {Array} abi array with filtered objects of type 'function'
+ */
 var filterFunctions = function (json) {
     return json.filter(function (current) {
         return current.type === 'function'; 
     }); 
 };
 
-/// Filters all events form input abi
-/// @returns abi array with filtered objects of type 'event'
+/**
+ * Filters all events from input abi
+ *
+ * @method filterEvents
+ * @param {Array} abi
+ * @returns {Array} abi array with filtered objects of type 'event'
+ */
 var filterEvents = function (json) {
     return json.filter(function (current) {
         return current.type === 'event';
     });
 };
 
-/// used to transform value/string to eth string
-/// TODO: use BigNumber.js to parse int
-/// TODO: add tests for it!
-var toEth = function (str) {
-     /*jshint maxcomplexity:7 */
-    var val = typeof str === "string" ? str.indexOf('0x') === 0 ? parseInt(str.substr(2), 16) : parseInt(str) : str;
-    var unit = 0;
-    var units = c.ETH_UNITS;
-    while (val > 3000 && unit < units.length - 1)
-    {
-        val /= 1000;
-        unit++;
-    }
-    var s = val.toString().length < val.toFixed(2).length ? val.toString() : val.toFixed(2);
-    var replaceFunction = function($0, $1, $2) {
-        return $1 + ',' + $2;
-    };
+/**
+ * Converts value to it's decimal representation in string
+ *
+ * @method toDecimal
+ * @param {String|Number|BigNumber}
+ * @return {String}
+ */
+var toDecimal = function (value) {
+    return toBigNumber(value).toNumber();
+};
 
-    while (true) {
-        var o = s;
-        s = s.replace(/(\d)(\d\d\d[\.\,])/, replaceFunction);
-        if (o === s)
-            break;
+/**
+ * Converts value to it's hex representation
+ *
+ * @method fromDecimal
+ * @param {String|Number|BigNumber}
+ * @return {String}
+ */
+var fromDecimal = function (value) {
+    var number = toBigNumber(value);
+    var result = number.toString(16);
+
+    return number.lessThan(0) ? '-0x' + result.substr(1) : '0x' + result;
+};
+
+/**
+ * Auto converts any given value into it's hex representation.
+ *
+ * And even stringifys objects before.
+ *
+ * @method toHex
+ * @param {String|Number|BigNumber|Object}
+ * @return {String}
+ */
+var toHex = function (val) {
+    /*jshint maxcomplexity:7 */
+
+    if(isBoolean(val))
+        return val;
+
+    if(isBigNumber(val))
+        return fromDecimal(val);
+
+    if(isObject(val))
+        return fromAscii(JSON.stringify(val));
+
+    // if its a negative number, pass it through fromDecimal
+    if (isString(val)) {
+        if (val.indexOf('-0x') === 0)
+           return fromDecimal(val);
+        else if (!isFinite(val))
+            return fromAscii(val);
     }
-    return s + ' ' + units[unit];
+
+    return fromDecimal(val);
+};
+
+/**
+ * Returns value of unit in Wei
+ *
+ * @method getValueOfUnit
+ * @param {String} unit the unit to convert to, default ether
+ * @returns {BigNumber} value of the unit (in Wei)
+ * @throws error if the unit is not correct:w
+ */
+var getValueOfUnit = function (unit) {
+    unit = unit ? unit.toLowerCase() : 'ether';
+    var unitValue = unitMap[unit];
+    if (unitValue === undefined) {
+        throw new Error('This unit doesn\'t exists, please use the one of the following units' + JSON.stringify(unitMap, null, 2));
+    }
+    return new BigNumber(unitValue, 10);
+};
+
+/**
+ * Takes a number of wei and converts it to any other ether unit.
+ *
+ * Possible units are:
+ * - kwei/ada
+ * - mwei/babbage
+ * - gwei/shannon
+ * - szabo
+ * - finney
+ * - ether
+ * - kether/grand/einstein
+ * - mether
+ * - gether
+ * - tether
+ *
+ * @method fromWei
+ * @param {Number|String} number can be a number, number string or a HEX of a decimal
+ * @param {String} unit the unit to convert to, default ether
+ * @return {String|Object} When given a BigNumber object it returns one as well, otherwise a number
+*/
+var fromWei = function(number, unit) {
+    var returnValue = toBigNumber(number).dividedBy(getValueOfUnit(unit));
+
+    return isBigNumber(number) ? returnValue : returnValue.toString(10); 
+};
+
+/**
+ * Takes a number of a unit and converts it to wei.
+ *
+ * Possible units are:
+ * - kwei/ada
+ * - mwei/babbage
+ * - gwei/shannon
+ * - szabo
+ * - finney
+ * - ether
+ * - kether/grand/einstein
+ * - mether
+ * - gether
+ * - tether
+ *
+ * @method toWei
+ * @param {Number|String|BigNumber} number can be a number, number string or a HEX of a decimal
+ * @param {String} unit the unit to convert from, default ether
+ * @return {String|Object} When given a BigNumber object it returns one as well, otherwise a number
+*/
+var toWei = function(number, unit) {
+    var returnValue = toBigNumber(number).times(getValueOfUnit(unit));
+
+    return isBigNumber(number) ? returnValue : returnValue.toString(10); 
+};
+
+/**
+ * Takes an input and transforms it into an bignumber
+ *
+ * @method toBigNumber
+ * @param {Number|String|BigNumber} a number, string, HEX string or BigNumber
+ * @return {BigNumber} BigNumber
+*/
+var toBigNumber = function(number) {
+    /*jshint maxcomplexity:5 */
+    number = number || 0;
+    if (isBigNumber(number))
+        return number;
+
+    if (isString(number) && (number.indexOf('0x') === 0 || number.indexOf('-0x') === 0)) {
+        return new BigNumber(number.replace('0x',''), 16);
+    }
+   
+    return new BigNumber(number.toString(10), 10);
+};
+
+/**
+ * Takes and input transforms it into bignumber and if it is negative value, into two's complement
+ *
+ * @method toTwosComplement
+ * @param {Number|String|BigNumber}
+ * @return {BigNumber}
+ */
+var toTwosComplement = function (number) {
+    var bigNumber = toBigNumber(number);
+    if (bigNumber.lessThan(0)) {
+        return new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16).plus(bigNumber).plus(1);
+    }
+    return bigNumber;
+};
+
+/**
+ * Checks if the given string has proper length
+ *
+ * @method isAddress
+ * @param {String} address the given HEX adress
+ * @return {Boolean}
+*/
+var isAddress = function(address) {
+    if (!isString(address)) {
+        return false;
+    }
+
+    return ((address.indexOf('0x') === 0 && address.length === 42) ||
+            (address.indexOf('0x') === -1 && address.length === 40));
+};
+
+/**
+ * Returns true if object is BigNumber, otherwise false
+ *
+ * @method isBigNumber
+ * @param {Object}
+ * @return {Boolean} 
+ */
+var isBigNumber = function (object) {
+    return object instanceof BigNumber ||
+        (object && object.constructor && object.constructor.name === 'BigNumber');
+};
+
+/**
+ * Returns true if object is string, otherwise false
+ * 
+ * @method isString
+ * @param {Object}
+ * @return {Boolean}
+ */
+var isString = function (object) {
+    return typeof object === 'string' ||
+        (object && object.constructor && object.constructor.name === 'String');
+};
+
+/**
+ * Returns true if object is function, otherwise false
+ *
+ * @method isFunction
+ * @param {Object}
+ * @return {Boolean}
+ */
+var isFunction = function (object) {
+    return typeof object === 'function';
+};
+
+/**
+ * Returns true if object is Objet, otherwise false
+ *
+ * @method isObject
+ * @param {Object}
+ * @return {Boolean}
+ */
+var isObject = function (object) {
+    return typeof object === 'object';
+};
+
+/**
+ * Returns true if object is boolean, otherwise false
+ *
+ * @method isBoolean
+ * @param {Object}
+ * @return {Boolean}
+ */
+var isBoolean = function (object) {
+    return typeof object === 'boolean';
+};
+
+/**
+ * Returns true if object is array, otherwise false
+ *
+ * @method isArray
+ * @param {Object}
+ * @return {Boolean}
+ */
+var isArray = function (object) {
+    return object instanceof Array; 
 };
 
 module.exports = {
     findIndex: findIndex,
+    toHex: toHex,
+    toDecimal: toDecimal,
+    fromDecimal: fromDecimal,
     toAscii: toAscii,
     fromAscii: fromAscii,
     extractDisplayName: extractDisplayName,
     extractTypeName: extractTypeName,
     filterFunctions: filterFunctions,
     filterEvents: filterEvents,
-    toEth: toEth
+    toWei: toWei,
+    fromWei: fromWei,
+    toBigNumber: toBigNumber,
+    toTwosComplement: toTwosComplement,
+    isBigNumber: isBigNumber,
+    isAddress: isAddress,
+    isFunction: isFunction,
+    isString: isString,
+    isObject: isObject,
+    isBoolean: isBoolean,
+    isArray: isArray
 };
 
 
-},{"./const":4}],8:[function(require,module,exports){
+}).call(this,require('_process'))
+},{"_process":2,"bignumber.js":8}],8:[function(require,module,exports){
 /*! bignumber.js v2.0.3 https://github.com/MikeMcl/bignumber.js/LICENCE */
 
 ;(function (global) {
@@ -3402,7 +3827,7 @@ module.exports = {
  * @date 2015
  */
 
-var abi = require('./node_modules/ethereum.js/lib/abi.js'); 
+var abi = require('./node_modules/ethereum.js/lib/solidity/abi.js'); 
 
 /**
  * This object should be used to evaluate natspec expression
@@ -3567,4 +3992,4 @@ var natspec = (function () {
 module.exports = natspec; 
 
 
-},{"./node_modules/ethereum.js/lib/abi.js":3}]},{},[]);
+},{"./node_modules/ethereum.js/lib/solidity/abi.js":3}]},{},[]);

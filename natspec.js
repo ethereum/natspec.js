@@ -20,7 +20,7 @@
  * @date 2015
  */
 
-var abi = require('./node_modules/ethereum.js/lib/abi.js'); 
+var abi = require('./node_modules/ethereum.js/lib/solidity/abi.js'); 
 
 /**
  * This object should be used to evaluate natspec expression

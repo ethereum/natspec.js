@@ -40,6 +40,12 @@ npm run-script build
 npm test
 ```
 
+## Testing (go)
+
+```bash
+go test
+```
+
 ## Wiki
 
 * [Ethereum Natural Specification Format](https://github.com/ethereum/wiki/wiki/Ethereum-Natural-Specification-Format)

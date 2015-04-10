@@ -1,66 +1,6 @@
 require=(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 
 },{}],2:[function(require,module,exports){
-// shim for using process in browser
-
-var process = module.exports = {};
-var queue = [];
-var draining = false;
-
-function drainQueue() {
-    if (draining) {
-        return;
-    }
-    draining = true;
-    var currentQueue;
-    var len = queue.length;
-    while(len) {
-        currentQueue = queue;
-        queue = [];
-        var i = -1;
-        while (++i < len) {
-            currentQueue[i]();
-        }
-        len = queue.length;
-    }
-    draining = false;
-}
-process.nextTick = function (fun) {
-    queue.push(fun);
-    if (!draining) {
-        setTimeout(drainQueue, 0);
-    }
-};
-
-process.title = 'browser';
-process.browser = true;
-process.env = {};
-process.argv = [];
-process.version = ''; // empty string to avoid regexp issues
-process.versions = {};
-
-function noop() {}
-
-process.on = noop;
-process.addListener = noop;
-process.once = noop;
-process.off = noop;
-process.removeListener = noop;
-process.removeAllListeners = noop;
-process.emit = noop;
-
-process.binding = function (name) {
-    throw new Error('process.binding is not supported');
-};
-
-// TODO(shtylman)
-process.cwd = function () { return '/' };
-process.chdir = function (dir) {
-    throw new Error('process.chdir is not supported');
-};
-process.umask = function() { return 0; };
-
-},{}],3:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -77,10 +17,10 @@ process.umask = function() { return 0; };
     You should have received a copy of the GNU Lesser General Public License
     along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file abi.js
- * @authors:
- *   Marek Kotewicz <marek@ethdev.com>
- *   Gav Wood <g@ethdev.com>
+/** 
+ * @file abi.js
+ * @author Marek Kotewicz <marek@ethdev.com>
+ * @author Gav Wood <g@ethdev.com>
  * @date 2014
  */
 
@@ -88,6 +28,7 @@ var utils = require('../utils/utils');
 var c = require('../utils/config');
 var types = require('./types');
 var f = require('./formatters');
+var solUtils = require('./utils');
 
 /**
  * throw incorrect type error
@@ -120,7 +61,7 @@ var isArrayType = function (type) {
  */
 var dynamicTypeBytes = function (type, value) {
     // TODO: decide what to do with array of strings
-    if (isArrayType(type) || type === 'string')    // only string itself that is dynamic; stringX is static length.
+    if (isArrayType(type) || type === 'bytes')
         return f.formatInputInt(value.length);
     return "";
 };
@@ -161,7 +102,7 @@ var formatInput = function (inputs, params) {
             toAppendArrayContent += params[i].reduce(function (acc, curr) {
                 return acc + formatter(curr);
             }, "");
-        else if (inputs[i].type === 'string')
+        else if (inputs[i].type === 'bytes')
             toAppendArrayContent += formatter(params[i]);
         else
             toAppendConstant += formatter(params[i]);
@@ -180,7 +121,7 @@ var formatInput = function (inputs, params) {
  * @returns {Number} length of dynamic type, 0 or multiplication of ETH_PADDING (32)
  */
 var dynamicBytesLength = function (type) {
-    if (isArrayType(type) || type === 'string')   // only string itself that is dynamic; stringX is static length.
+    if (isArrayType(type) || type === 'bytes')
         return c.ETH_PADDING * 2;
     return 0;
 };
@@ -230,7 +171,7 @@ var formatOutput = function (outs, output) {
             }
             result.push(array);
         }
-        else if (types.prefixedType('string')(outs[i].type)) {
+        else if (types.prefixedType('bytes')(outs[i].type)) {
             dynamicPart = dynamicPart.slice(padding);
             result.push(formatter(output.slice(0, padding)));
             output = output.slice(padding);
@@ -300,15 +241,26 @@ var outputParser = function (json) {
     return parser;
 };
 
+var formatConstructorParams = function (abi, params) {
+    var constructor = solUtils.getConstructor(abi, params.length);
+    if (!constructor) {
+        if (params.length > 0) {
+            console.warn("didn't found matching constructor, using default one");
+        }
+        return '';
+    }
+    return formatInput(constructor.inputs, params);
+};
+
 module.exports = {
     inputParser: inputParser,
     outputParser: outputParser,
     formatInput: formatInput,
-    formatOutput: formatOutput
+    formatOutput: formatOutput,
+    formatConstructorParams: formatConstructorParams
 };
 
-},{"../utils/config":6,"../utils/utils":7,"./formatters":4,"./types":5}],4:[function(require,module,exports){
-(function (process){
+},{"../utils/config":6,"../utils/utils":7,"./formatters":3,"./types":4,"./utils":5}],3:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -331,25 +283,9 @@ module.exports = {
  * @date 2015
  */
 
-if (process.env.NODE_ENV !== 'build') {
-    var BigNumber = require('bignumber.js'); // jshint ignore:line
-}
-
+var BigNumber = require('bignumber.js');
 var utils = require('../utils/utils');
 var c = require('../utils/config');
-
-/**
- * Should be called to pad string to expected length
- *
- * @method padLeft
- * @param {String} string to be padded
- * @param {Number} characters that result string should have
- * @param {String} sign, by default 0
- * @returns {String} right aligned string
- */
-var padLeft = function (string, chars, sign) {
-    return new Array(chars - string.length + 1).join(sign ? sign : "0") + string;
-};
 
 /**
  * Formats input value to byte representation of int
@@ -363,7 +299,7 @@ var padLeft = function (string, chars, sign) {
 var formatInputInt = function (value) {
     var padding = c.ETH_PADDING * 2;
     BigNumber.config(c.ETH_BIGNUMBER_ROUNDING_MODE);
-    return padLeft(utils.toTwosComplement(value).round().toString(16), padding);
+    return utils.padLeft(utils.toTwosComplement(value).round().toString(16), padding);
 };
 
 /**
@@ -524,8 +460,7 @@ module.exports = {
 };
 
 
-}).call(this,require('_process'))
-},{"../utils/config":6,"../utils/utils":7,"_process":2,"bignumber.js":8}],5:[function(require,module,exports){
+},{"../utils/config":6,"../utils/utils":7,"bignumber.js":8}],4:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -573,8 +508,7 @@ var inputTypes = function () {
     return [
         { type: prefixedType('uint'), format: f.formatInputInt },
         { type: prefixedType('int'), format: f.formatInputInt },
-        { type: prefixedType('hash'), format: f.formatInputInt },
-        { type: prefixedType('string'), format: f.formatInputString }, 
+        { type: prefixedType('bytes'), format: f.formatInputString }, 
         { type: prefixedType('real'), format: f.formatInputReal },
         { type: prefixedType('ureal'), format: f.formatInputReal },
         { type: namedType('address'), format: f.formatInputInt },
@@ -589,8 +523,7 @@ var outputTypes = function () {
     return [
         { type: prefixedType('uint'), format: f.formatOutputUInt },
         { type: prefixedType('int'), format: f.formatOutputInt },
-        { type: prefixedType('hash'), format: f.formatOutputHash },
-        { type: prefixedType('string'), format: f.formatOutputString },
+        { type: prefixedType('bytes'), format: f.formatOutputString },
         { type: prefixedType('real'), format: f.formatOutputReal },
         { type: prefixedType('ureal'), format: f.formatOutputUReal },
         { type: namedType('address'), format: f.formatOutputAddress },
@@ -606,8 +539,77 @@ module.exports = {
 };
 
 
-},{"./formatters":4}],6:[function(require,module,exports){
-(function (process){
+},{"./formatters":3}],5:[function(require,module,exports){
+/*
+    This file is part of ethereum.js.
+
+    ethereum.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    ethereum.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @file utils.js
+ * @author Marek Kotewicz <marek@ethdev.com>
+ * @date 2015
+ */
+
+/**
+ * Returns the contstructor with matching number of arguments
+ *
+ * @method getConstructor
+ * @param {Array} abi
+ * @param {Number} numberOfArgs
+ * @returns {Object} constructor function abi
+ */
+var getConstructor = function (abi, numberOfArgs) {
+    return abi.filter(function (f) {
+        return f.type === 'constructor' && f.inputs.length === numberOfArgs;
+    })[0];
+};
+
+/**
+ * Filters all functions from input abi
+ *
+ * @method filterFunctions
+ * @param {Array} abi
+ * @returns {Array} abi array with filtered objects of type 'function'
+ */
+var filterFunctions = function (json) {
+    return json.filter(function (current) {
+        return current.type === 'function'; 
+    }); 
+};
+
+/**
+ * Filters all events from input abi
+ *
+ * @method filterEvents
+ * @param {Array} abi
+ * @returns {Array} abi array with filtered objects of type 'event'
+ */
+var filterEvents = function (json) {
+    return json.filter(function (current) {
+        return current.type === 'event';
+    });
+};
+
+module.exports = {
+    getConstructor: getConstructor,
+    filterFunctions: filterFunctions,
+    filterEvents: filterEvents
+};
+
+
+},{}],6:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -644,9 +646,7 @@ module.exports = {
  */
 
 /// required to define ETH_BIGNUMBER_ROUNDING_MODE
-if (process.env.NODE_ENV !== 'build') {
-    var BigNumber = require('bignumber.js'); // jshint ignore:line
-}
+var BigNumber = require('bignumber.js');
 
 var ETH_UNITS = [ 
     'wei', 
@@ -680,9 +680,7 @@ module.exports = {
 };
 
 
-}).call(this,require('_process'))
-},{"_process":2,"bignumber.js":8}],7:[function(require,module,exports){
-(function (process){
+},{"bignumber.js":8}],7:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -718,9 +716,7 @@ module.exports = {
  * @constructor
  */
 
-if (process.env.NODE_ENV !== 'build') {
-    var BigNumber = require('bignumber.js'); // jshint ignore:line
-}
+var BigNumber = require('bignumber.js');
 
 var unitMap = {
     'wei':      '1',
@@ -741,6 +737,18 @@ var unitMap = {
     'tether':   '1000000000000000000000000000000'
 };
 
+/**
+ * Should be called to pad string to expected length
+ *
+ * @method padLeft
+ * @param {String} string to be padded
+ * @param {Number} characters that result string should have
+ * @param {String} sign, by default 0
+ * @returns {String} right aligned string
+ */
+var padLeft = function (string, chars, sign) {
+    return new Array(chars - string.length + 1).join(sign ? sign : "0") + string;
+};
 
 /** Finds first index of array element matching pattern
  *
@@ -837,32 +845,6 @@ var extractTypeName = function (name) {
 };
 
 /**
- * Filters all functions from input abi
- *
- * @method filterFunctions
- * @param {Array} abi
- * @returns {Array} abi array with filtered objects of type 'function'
- */
-var filterFunctions = function (json) {
-    return json.filter(function (current) {
-        return current.type === 'function'; 
-    }); 
-};
-
-/**
- * Filters all events from input abi
- *
- * @method filterEvents
- * @param {Array} abi
- * @returns {Array} abi array with filtered objects of type 'event'
- */
-var filterEvents = function (json) {
-    return json.filter(function (current) {
-        return current.type === 'event';
-    });
-};
-
-/**
  * Converts value to it's decimal representation in string
  *
  * @method toDecimal
@@ -899,13 +881,13 @@ var fromDecimal = function (value) {
 var toHex = function (val) {
     /*jshint maxcomplexity:7 */
 
-    if(isBoolean(val))
-        return val;
+    if (isBoolean(val))
+        return fromDecimal(+val);
 
-    if(isBigNumber(val))
+    if (isBigNumber(val))
         return fromDecimal(val);
 
-    if(isObject(val))
+    if (isObject(val))
         return fromAscii(JSON.stringify(val));
 
     // if its a negative number, pass it through fromDecimal
@@ -1024,19 +1006,44 @@ var toTwosComplement = function (number) {
 };
 
 /**
- * Checks if the given string has proper length
+ * Checks if the given string is strictly an address
+ *
+ * @method isStrictAddress
+ * @param {String} address the given HEX adress
+ * @return {Boolean}
+*/
+var isStrictAddress = function (address) {
+    return /^0x[0-9a-f]{40}$/.test(address);
+};
+
+/**
+ * Checks if the given string is an address
  *
  * @method isAddress
  * @param {String} address the given HEX adress
  * @return {Boolean}
 */
-var isAddress = function(address) {
-    if (!isString(address)) {
-        return false;
+var isAddress = function (address) {
+    return /^(0x)?[0-9a-f]{40}$/.test(address);
+};
+
+/**
+ * Transforms given string to valid 20 bytes-length addres with 0x prefix
+ *
+ * @method toAddress
+ * @param {String} address
+ * @return {String} formatted address
+ */
+var toAddress = function (address) {
+    if (isStrictAddress(address)) {
+        return address;
+    }
+    
+    if (/^[0-9a-f]{40}$/.test(address)) {
+        return '0x' + address;
     }
 
-    return ((address.indexOf('0x') === 0 && address.length === 42) ||
-            (address.indexOf('0x') === -1 && address.length === 40));
+    return '0x' + padLeft(toHex(address).substr(2), 40);
 };
 
 /**
@@ -1107,7 +1114,23 @@ var isArray = function (object) {
     return object instanceof Array; 
 };
 
+/**
+ * Returns true if given string is valid json object
+ * 
+ * @method isJson
+ * @param {String}
+ * @return {Boolean}
+ */
+var isJson = function (str) {
+    try {
+        return !!JSON.parse(str);
+    } catch (e) {
+        return false;
+    }
+};
+
 module.exports = {
+    padLeft: padLeft,
     findIndex: findIndex,
     toHex: toHex,
     toDecimal: toDecimal,
@@ -1116,31 +1139,31 @@ module.exports = {
     fromAscii: fromAscii,
     extractDisplayName: extractDisplayName,
     extractTypeName: extractTypeName,
-    filterFunctions: filterFunctions,
-    filterEvents: filterEvents,
     toWei: toWei,
     fromWei: fromWei,
     toBigNumber: toBigNumber,
     toTwosComplement: toTwosComplement,
+    toAddress: toAddress,
     isBigNumber: isBigNumber,
+    isStrictAddress: isStrictAddress,
     isAddress: isAddress,
     isFunction: isFunction,
     isString: isString,
     isObject: isObject,
     isBoolean: isBoolean,
-    isArray: isArray
+    isArray: isArray,
+    isJson: isJson
 };
 
 
-}).call(this,require('_process'))
-},{"_process":2,"bignumber.js":8}],8:[function(require,module,exports){
-/*! bignumber.js v2.0.3 https://github.com/MikeMcl/bignumber.js/LICENCE */
+},{"bignumber.js":8}],8:[function(require,module,exports){
+/*! bignumber.js v2.0.7 https://github.com/MikeMcl/bignumber.js/LICENCE */
 
 ;(function (global) {
     'use strict';
 
     /*
-      bignumber.js v2.0.3
+      bignumber.js v2.0.7
       A JavaScript library for arbitrary-precision arithmetic.
       https://github.com/MikeMcl/bignumber.js
       Copyright (c) 2015 Michael Mclaughlin <M8ch88l@gmail.com>
@@ -1972,10 +1995,12 @@ module.exports = {
                     i = 0;
                     s += 2;
 
-                    // Normalise xc and yc so highest order digit of yc is >= base/2
+                    // Normalise xc and yc so highest order digit of yc is >= base / 2.
 
                     n = mathfloor( base / ( yc[0] + 1 ) );
 
+                    // Not necessary, but to handle odd bases where yc[0] == ( base / 2 ) - 1.
+                    // if ( n > 1 || n++ == 1 && yc[0] < base / 2 ) {
                     if ( n > 1 ) {
                         yc = multiply( yc, n, base );
                         xc = multiply( xc, n, base );
@@ -1993,6 +2018,8 @@ module.exports = {
                     yz.unshift(0);
                     yc0 = yc[0];
                     if ( yc[1] >= base / 2 ) yc0++;
+                    // Not necessary, but to prevent trial digit n > base, when using base 3.
+                    // else if ( base == 3 && yc0 == 1 ) yc0 = 1 + 1e-15;
 
                     do {
                         n = 0;
@@ -2020,7 +2047,9 @@ module.exports = {
                             //    6. If remainder > divisor: remainder -= divisor, n++
 
                             if ( n > 1 ) {
-                                if ( n >= base ) n = base - 1;
+
+                                // n may be > base only when base is 3.
+                                if (n >= base) n = base - 1;
 
                                 // product = divisor * trial digit.
                                 prod = multiply( yc, n, base );
@@ -2028,58 +2057,66 @@ module.exports = {
                                 remL = rem.length;
 
                                 // Compare product and remainder.
-                                cmp = compare( prod, rem, prodL, remL );
-
-                                // product > remainder.
-                                if ( cmp == 1 ) {
+                                // If product > remainder.
+                                // Trial digit n too high.
+                                // n is 1 too high about 5% of the time, and is not known to have
+                                // ever been more than 1 too high.
+                                while ( compare( prod, rem, prodL, remL ) == 1 ) {
                                     n--;
 
                                     // Subtract divisor from product.
                                     subtract( prod, yL < prodL ? yz : yc, prodL, base );
+                                    prodL = prod.length;
+                                    cmp = 1;
                                 }
                             } else {
 
-                                // cmp is -1.
-                                // If n is 0, there is no need to compare yc and rem again
-                                // below, so change cmp to 1 to avoid it.
-                                // If n is 1, compare yc and rem again below.
-                                if ( n == 0 ) cmp = n = 1;
+                                // n is 0 or 1, cmp is -1.
+                                // If n is 0, there is no need to compare yc and rem again below,
+                                // so change cmp to 1 to avoid it.
+                                // If n is 1, leave cmp as -1, so yc and rem are compared again.
+                                if ( n == 0 ) {
+
+                                    // divisor < remainder, so n must be at least 1.
+                                    cmp = n = 1;
+                                }
+
+                                // product = divisor
                                 prod = yc.slice();
+                                prodL = prod.length;
                             }
 
-                            prodL = prod.length;
                             if ( prodL < remL ) prod.unshift(0);
 
                             // Subtract product from remainder.
                             subtract( rem, prod, remL, base );
+                            remL = rem.length;
 
-                            // If product was < previous remainder.
+                             // If product was < remainder.
                             if ( cmp == -1 ) {
-                                remL = rem.length;
 
                                 // Compare divisor and new remainder.
-                                cmp = compare( yc, rem, yL, remL );
-
                                 // If divisor < new remainder, subtract divisor from remainder.
-                                if ( cmp < 1 ) {
+                                // Trial digit n too low.
+                                // n is 1 too low about 5% of the time, and very rarely 2 too low.
+                                while ( compare( yc, rem, yL, remL ) < 1 ) {
                                     n++;
 
                                     // Subtract divisor from remainder.
                                     subtract( rem, yL < remL ? yz : yc, remL, base );
+                                    remL = rem.length;
                                 }
                             }
-                            remL = rem.length;
                         } else if ( cmp === 0 ) {
                             n++;
                             rem = [0];
-                        }
-                        // if cmp === 1, n will be 0
+                        } // else cmp === 1 and n will be 0
 
                         // Add the next digit, n, to the result array.
                         qc[i++] = n;
 
                         // Update the remainder.
-                        if ( cmp && rem[0] ) {
+                        if ( rem[0] ) {
                             rem[remL++] = xc[xi] || 0;
                         } else {
                             rem = [ xc[xi] ];
@@ -3827,7 +3864,7 @@ module.exports = {
  * @date 2015
  */
 
-var abi = require('./node_modules/ethereum.js/lib/solidity/abi.js'); 
+var abi = require('./node_modules/web3/lib/solidity/abi.js'); 
 
 /**
  * This object should be used to evaluate natspec expression
@@ -3992,4 +4029,4 @@ var natspec = (function () {
 module.exports = natspec; 
 
 
-},{"./node_modules/ethereum.js/lib/solidity/abi.js":3}]},{},[]);
+},{"./node_modules/web3/lib/solidity/abi.js":2}]},{},[]);

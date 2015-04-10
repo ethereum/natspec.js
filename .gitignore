@@ -1,3 +1,10 @@
 # VIM stuff
 *.swp
+
+# node stuff
 node_modules/
+
+# IntelliJ stuff
+/.idea
+*.iml
+

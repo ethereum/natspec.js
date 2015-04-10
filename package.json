@@ -4,13 +4,13 @@
   "description": "Javascript Library used to evaluate natspec expressions",
   "main": "natspec.js",
   "scripts": {
-    "build": "cd dist && browserify -r ../natspec.js:natspec -i crypto -o natspec.js && uglifyjs natspec.js --source-map natspec.js.map -c -m -o natspec.min.js",
+    "build": "bash build.sh",
     "test": "mocha",
     "test-coveralls": "istanbul cover _mocha -- -R spec && cat coverage/lcov.info | coveralls --verbose"
   },
   "author": "",
   "dependencies": {
-    "ethereum.js": "ethereum/ethereum.js#master"
+    "ethereum.js": "ethereum/web3.js#master"
   },
   "devDependencies": {
     "browserify": "^9.0.3",

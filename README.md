@@ -46,8 +46,9 @@ npm test
 go test
 ```
 
-## Wiki
+## Specification
 
-* [Ethereum Natural Specification Format](https://github.com/ethereum/wiki/wiki/Ethereum-Natural-Specification-Format)
-* [Natspec Example](https://github.com/ethereum/wiki/wiki/Natspec-Example)
+The NatSpec documentation is maintained at:
 
+* https://solidity.readthedocs.io/en/v0.5.8/natspec-format.html?highlight=Natspec
+* https://vyper.readthedocs.io/en/latest/structure-of-a-contract.html#natspec-metadata
